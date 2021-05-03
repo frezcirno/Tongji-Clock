@@ -4,7 +4,7 @@
 #pragma comment(lib, "WinInet.lib")
 
 constexpr INT CLIENT_WIDTH = 400;
-constexpr INT CLIENT_HEIGHT = 150;
+constexpr INT CLIENT_HEIGHT = 80;
 constexpr COLORREF TRANS_COLOR = RGB(249, 201, 201);
 constexpr WCHAR WND_CLASS[] = L"Tongji Clock";// 主窗口类名
 RECT wndSize = { 0, 0, CLIENT_WIDTH, CLIENT_HEIGHT };
@@ -13,7 +13,7 @@ DATE TERM_START_DATE = 0;
 // 全局变量:
 HINSTANCE hInst = NULL;                                // 当前实例
 HBRUSH hBgBrush = NULL;
-HDC dc = NULL;
+HDC hDc = NULL;
 SYSTEMTIME time;
 WCHAR wcHitokoto[64] = { 0 };
 WCHAR wcStr[128] = { 0 };
@@ -50,10 +50,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
-
-	//KillTimer(hWnd, 1);
-	//DeleteObject(hBgBrush);
-	//ReleaseDC(hWnd, dc);
 
 	return (int)msg.wParam;
 }
@@ -125,10 +121,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		{
 			SetTimer(hWnd, 0, 1000, NULL); //设定时器
 			SetTimer(hWnd, 1, 3600 * 1000, NULL); //设定时器
-			dc = GetDC(hWnd);
-			SetTextColor(dc, RGB(165, 165, 165));
-			SetBkMode(dc, TRANSPARENT); // 不画背景色
-			DeleteObject(SelectObject(dc, CreateFont(
+			hDc = GetDC(hWnd);
+			SetTextColor(hDc, RGB(10, 15, 10));
+			SetBkMode(hDc, TRANSPARENT); // 不画背景色
+			DeleteObject(SelectObject(hDc, CreateFont(
 				26, 12, 0, 0, FW_SEMIBOLD, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
 				CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SCRIPT, L"仿宋"
 			)));
@@ -149,14 +145,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				WCHAR wcDateStr[64];
 				GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &time, L"dddd", wcDateStr, _countof(wcDateStr), NULL);
 
-				wsprintf(wcStr, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d\n%s",
+				wsprintf(wcStr, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d",
+					termWeek, wcDateStr,
+					time.wYear, time.wMonth, time.wDay,
+					time.wHour, time.wMinute, time.wSecond);
+
+				/*wsprintf(wcStr, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d\n%s",
 					termWeek, wcDateStr, 
 					time.wYear, time.wMonth, time.wDay, 
 					time.wHour, time.wMinute, time.wSecond,
-					wcHitokoto);
+					wcHitokoto);*/
 
-				FillRect(dc, &wndSize, hBgBrush); // clear window
-				DrawText(dc, wcStr, lstrlen(wcStr), &wndSize, DT_CENTER | DT_WORDBREAK | DT_MODIFYSTRING);
+				FillRect(hDc, &wndSize, hBgBrush); // clear window
+				DrawText(hDc, wcStr, lstrlen(wcStr), &wndSize, DT_CENTER | DT_WORDBREAK | DT_MODIFYSTRING);
 			}
 			else if (wParam == 1) {
 				GetHitokoto();
@@ -168,11 +169,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hWnd, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0); // 发送移动拖拽窗口移动指令
 		break;
 
-	//case WM_RBUTTONDBLCLK:
-	//	GetHitokoto();
-	//	break;
+	case WM_RBUTTONDOWN:
+		GetHitokoto();
+		break;
 
 	case WM_DESTROY:
+		KillTimer(hWnd, 0);
+		KillTimer(hWnd, 1);
+		DeleteObject(hBgBrush);
+		ReleaseDC(hWnd, hDc);
 		PostQuitMessage(0);
 		break;
 
