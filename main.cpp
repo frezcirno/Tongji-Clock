@@ -4,13 +4,10 @@
 constexpr auto CLIENT_WIDTH = 400;
 constexpr auto CLIENT_HEIGHT = 150;
 constexpr auto TRANS_COLOR = RGB(249, 201, 201);
-
-#define MAX_LOADSTRING 100
+constexpr auto WINDOWCLASS = L"Tongji Clock";// 主窗口类名
 
 // 全局变量:
 HINSTANCE hInst;                                // 当前实例
-WCHAR szWindowClass[MAX_LOADSTRING];            // 主窗口类名
-
 HBRUSH bgBrush = NULL;
 RECT wndSize = { 0, 0, CLIENT_WIDTH, CLIENT_HEIGHT };
 HDC dc;
@@ -19,9 +16,10 @@ SYSTEMTIME time;
 wchar_t str[64];
 
 // 此代码模块中包含的函数的前向声明:
-ATOM                MyRegisterClass(HINSTANCE hInstance);
-BOOL                InitInstance(HINSTANCE, int);
-LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
+int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int);
+ATOM MyRegisterClass(HINSTANCE hInstance);
+BOOL InitInstance(HINSTANCE, int);
+LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	_In_opt_ HINSTANCE hPrevInstance,
@@ -71,7 +69,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)COLOR_WINDOW;
 	wcex.lpszMenuName = nullptr;
-	wcex.lpszClassName = L"Tongji Clock";
+	wcex.lpszClassName = WINDOWCLASS;
 	wcex.hIconSm = LoadIcon(nullptr, MAKEINTRESOURCE(IDI_APPLICATION));
 
 	return RegisterClassExW(&wcex);
@@ -88,7 +86,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	r.top = r.bottom - CLIENT_HEIGHT;
 
 	HWND hWnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-		szWindowClass, nullptr, WS_POPUP,
+		WINDOWCLASS, nullptr, WS_POPUP,
 		r.left, r.top, CLIENT_WIDTH, CLIENT_HEIGHT,
 		GetDesktopWindow(), nullptr, hInstance, nullptr);
 
@@ -121,7 +119,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
 	case WM_CREATE:
 		{
-			SetTimer(hWnd, 1, 1000, NULL); //设定时器
+			SetTimer(hWnd, 0, 1000, NULL); //设定时器
 			dc = GetDC(hWnd);
 			SetTextColor(dc, RGB(10, 15, 10));
 			SetBkMode(dc, TRANSPARENT); // 不画背景色
@@ -135,14 +133,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				CLIP_DEFAULT_PRECIS,
 				DEFAULT_QUALITY,        //一系列的默认值  
 				DEFAULT_PITCH | FF_DONTCARE,
-				L"等线 Light"    //字体名称  
+				L"宋体"    //字体名称  
 			)));
 		}
 		break;
 
 	case WM_TIMER:
 		{
-			if (wParam == 1)
+			if (wParam == 0)
 			{
 				DATE date;
 				GetLocalTime(&time);
@@ -153,8 +151,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				wchar_t dateStr[64];
 				GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &time, L"dddd", dateStr, _countof(dateStr), NULL);
 
-				wsprintf(str, L"%hu/%hu/%hu\n第%d周 %s\n%02d:%02d:%02d",
-					time.wYear, time.wMonth, time.wDay, termWeek, dateStr, time.wHour, time.wMinute, time.wSecond);
+				wsprintf(str, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d\n",
+					termWeek, dateStr, 
+					time.wYear, time.wMonth, time.wDay, 
+					time.wHour, time.wMinute, time.wSecond);
 
 				FillRect(dc, &wndSize, bgBrush); // clear window
 				DrawText(dc, str, lstrlen(str), &wndSize, DT_CENTER | DT_WORDBREAK | DT_MODIFYSTRING);
