@@ -1,25 +1,29 @@
 #include <windows.h>
+#include <wininet.h>
 #include <cstdio>
+#pragma comment(lib, "WinInet.lib")
 
-constexpr auto CLIENT_WIDTH = 400;
-constexpr auto CLIENT_HEIGHT = 150;
-constexpr auto TRANS_COLOR = RGB(249, 201, 201);
-constexpr auto WINDOWCLASS = L"Tongji Clock";// 主窗口类名
+constexpr INT CLIENT_WIDTH = 400;
+constexpr INT CLIENT_HEIGHT = 150;
+constexpr COLORREF TRANS_COLOR = RGB(249, 201, 201);
+constexpr WCHAR WND_CLASS[] = L"Tongji Clock";// 主窗口类名
+RECT wndSize = { 0, 0, CLIENT_WIDTH, CLIENT_HEIGHT };
+DATE TERM_START_DATE = 0;
 
 // 全局变量:
-HINSTANCE hInst;                                // 当前实例
-HBRUSH bgBrush = NULL;
-RECT wndSize = { 0, 0, CLIENT_WIDTH, CLIENT_HEIGHT };
-HDC dc;
+HINSTANCE hInst = NULL;                                // 当前实例
+HBRUSH hBgBrush = NULL;
+HDC dc = NULL;
 SYSTEMTIME time;
-
-wchar_t str[64];
+WCHAR wcHitokoto[64] = { 0 };
+WCHAR wcStr[128] = { 0 };
 
 // 此代码模块中包含的函数的前向声明:
 int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int);
 ATOM MyRegisterClass(HINSTANCE hInstance);
 BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+VOID GetHitokoto();
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	_In_opt_ HINSTANCE hPrevInstance,
@@ -48,7 +52,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	//KillTimer(hWnd, 1);
-	//DeleteObject(bgBrush);
+	//DeleteObject(hBgBrush);
 	//ReleaseDC(hWnd, dc);
 
 	return (int)msg.wParam;
@@ -69,7 +73,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)COLOR_WINDOW;
 	wcex.lpszMenuName = nullptr;
-	wcex.lpszClassName = WINDOWCLASS;
+	wcex.lpszClassName = WND_CLASS;
 	wcex.hIconSm = LoadIcon(nullptr, MAKEINTRESOURCE(IDI_APPLICATION));
 
 	return RegisterClassExW(&wcex);
@@ -86,7 +90,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	r.top = r.bottom - CLIENT_HEIGHT;
 
 	HWND hWnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-		WINDOWCLASS, nullptr, WS_POPUP,
+		WND_CLASS, nullptr, WS_POPUP,
 		r.left, r.top, CLIENT_WIDTH, CLIENT_HEIGHT,
 		GetDesktopWindow(), nullptr, hInstance, nullptr);
 
@@ -97,7 +101,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOMOVE | SWP_NOSIZE);
 	SetLayeredWindowAttributes(hWnd, TRANS_COLOR, 255, LWA_COLORKEY);
-	bgBrush = CreateSolidBrush(TRANS_COLOR);
+	hBgBrush = CreateSolidBrush(TRANS_COLOR);
 
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
@@ -120,21 +124,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 		{
 			SetTimer(hWnd, 0, 1000, NULL); //设定时器
+			SetTimer(hWnd, 1, 3600 * 1000, NULL); //设定时器
 			dc = GetDC(hWnd);
-			SetTextColor(dc, RGB(10, 15, 10));
+			SetTextColor(dc, RGB(165, 165, 165));
 			SetBkMode(dc, TRANSPARENT); // 不画背景色
 			DeleteObject(SelectObject(dc, CreateFont(
-				50, 20,    //高度50, 宽取20表示由系统选择最佳值  
-				0, 0,    //文本倾斜，与字体倾斜都为0  
-				FW_HEAVY,    //粗体  
-				0, 0, 0,        //非斜体，无下划线，无中划线  
-				DEFAULT_CHARSET,    //字符集  
-				OUT_DEFAULT_PRECIS,
-				CLIP_DEFAULT_PRECIS,
-				DEFAULT_QUALITY,        //一系列的默认值  
-				DEFAULT_PITCH | FF_DONTCARE,
-				L"宋体"    //字体名称  
+				26, 12, 0, 0, FW_SEMIBOLD, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+				CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SCRIPT, L"仿宋"
 			)));
+			TERM_START_DATE = ToDate(2021, 3, 1);
+			GetHitokoto();
 		}
 		break;
 
@@ -145,19 +144,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				DATE date;
 				GetLocalTime(&time);
 				SystemTimeToVariantTime(&time, &date);
-				DATE termStartDate = ToDate(2021, 3, 1);
-				INT termWeek = (date - termStartDate + 7) / 7;
+				INT termWeek = (date - TERM_START_DATE + 7) / 7;
 
-				wchar_t dateStr[64];
-				GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &time, L"dddd", dateStr, _countof(dateStr), NULL);
+				WCHAR wcDateStr[64];
+				GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &time, L"dddd", wcDateStr, _countof(wcDateStr), NULL);
 
-				wsprintf(str, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d\n",
-					termWeek, dateStr, 
+				wsprintf(wcStr, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d\n%s",
+					termWeek, wcDateStr, 
 					time.wYear, time.wMonth, time.wDay, 
-					time.wHour, time.wMinute, time.wSecond);
+					time.wHour, time.wMinute, time.wSecond,
+					wcHitokoto);
 
-				FillRect(dc, &wndSize, bgBrush); // clear window
-				DrawText(dc, str, lstrlen(str), &wndSize, DT_CENTER | DT_WORDBREAK | DT_MODIFYSTRING);
+				FillRect(dc, &wndSize, hBgBrush); // clear window
+				DrawText(dc, wcStr, lstrlen(wcStr), &wndSize, DT_CENTER | DT_WORDBREAK | DT_MODIFYSTRING);
+			}
+			else if (wParam == 1) {
+				GetHitokoto();
 			}
 		}
 		break;
@@ -165,6 +167,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_LBUTTONDOWN:
 		SendMessage(hWnd, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0); // 发送移动拖拽窗口移动指令
 		break;
+
+	//case WM_RBUTTONDBLCLK:
+	//	GetHitokoto();
+	//	break;
 
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -175,4 +181,46 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 
 	return 0;
+}
+
+VOID GetHitokoto()
+{
+	HINTERNET hInternet = NULL;
+	HINTERNET hConnect = NULL;
+	HINTERNET hRequest = NULL;
+	BOOL bRet = FALSE;
+
+	do {
+		hInternet = InternetOpenA("WinInetGet/0.1", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
+		if (NULL == hInternet) break;
+
+		hConnect = InternetConnectA(hInternet, "v1.hitokoto.cn", INTERNET_DEFAULT_HTTPS_PORT
+			, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+		if (NULL == hConnect) break;
+
+		hRequest = HttpOpenRequestA(hConnect, "GET", "/?c=a&c=b&c=c&encode=text&charset=utf-8",
+			NULL, NULL, NULL, INTERNET_FLAG_DONT_CACHE | INTERNET_FLAG_SECURE, 0);
+		if (NULL == hRequest) break;
+
+		bRet = HttpSendRequestA(hRequest, NULL, 0, NULL, 0);
+		if (!bRet) break;
+
+		CHAR szResult[1024] = { 0 };
+		CHAR szBuffer[1024] = { 0 };
+		INT point = 0;
+		DWORD dwByteRead = 0;
+
+		while (InternetReadFile(hRequest, szBuffer, sizeof(szBuffer), &dwByteRead) && dwByteRead > 0)
+		{
+			memcpy(szResult + point, szBuffer, dwByteRead);
+			point += dwByteRead;
+			ZeroMemory(szBuffer, dwByteRead);
+		}
+
+		MultiByteToWideChar(CP_UTF8, MB_COMPOSITE, szResult, -1, wcHitokoto, _countof(wcHitokoto));
+	} while (FALSE);
+
+	if (hInternet) InternetCloseHandle(hInternet);
+	if (hConnect) InternetCloseHandle(hConnect);
+	if (hRequest) InternetCloseHandle(hRequest);
 }
