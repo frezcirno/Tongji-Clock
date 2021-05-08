@@ -11,10 +11,19 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 DATE ToDate(int, WORD, WORD, WORD = 0, WORD = 0, WORD = 0, WORD = 0);
 VOID GetHitokoto();
 
-constexpr INT CLIENT_WIDTH = 400;
-constexpr INT CLIENT_HEIGHT = 26 * 4;
+#define CHAR_WIDTH  12
+#define CHAR_HEIGHT 26
+
+#define CHAR_COLUMN 20
+#define CHAR_ROW    3
+
+#define CLIENT_WIDTH  CHAR_WIDTH * CHAR_COLUMN
+#define CLIENT_HEIGHT CHAR_HEIGHT * CHAR_ROW
+
+#define REFRESH_PERIOD_MS  3600 * 1000
 constexpr COLORREF TRANS_COLOR = RGB(249, 201, 201);
-constexpr WCHAR WND_CLASS[] = L"Tongji Clock"; // 主窗口类名
+
+const WCHAR WND_CLASS[] = L"Tongji Clock"; // 主窗口类名
 RECT wndSize = { 0, 0, CLIENT_WIDTH, CLIENT_HEIGHT };
 CONST DATE TERM_START_DATE = ToDate(2021, 3, 1);
 
@@ -119,74 +128,89 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	switch (msg)
 	{
 	case WM_CREATE:
-		{
-			SetTimer(hWnd, 0, 1000, NULL); //设定时器
-			SetTimer(hWnd, 1, 3600 * 1000, NULL); //设定时器
-			hdc = GetDC(hWnd);
-			SetTextColor(hdc, RGB(165, 165, 165));
-			
-			SetBkMode(hdc, TRANSPARENT); // 不画文字的背景色
+	{
+		SetTimer(hWnd, 0, 1000, NULL); //设定时器
+		SetTimer(hWnd, 1, REFRESH_PERIOD_MS, NULL); //设定时器
+		hdc = GetDC(hWnd);
+		SetTextColor(hdc, RGB(165, 165, 165));
 
-			HFONT hFont = CreateFont(
-				26, 12, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
-				DEFAULT_CHARSET, OUT_CHARACTER_PRECIS, CLIP_CHARACTER_PRECIS,
-				DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"仿宋"
-			);
-			 
-			HGDIOBJ hOldDc = SelectObject(hdc, hFont);
-			DeleteObject(hOldDc);
-		
-			GetHitokoto();
-		}
-		break;
+		SetBkMode(hdc, TRANSPARENT); // 不画文字的背景色
+
+		HFONT hFont = CreateFont(
+			CHAR_HEIGHT, CHAR_WIDTH, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+			DEFAULT_CHARSET, OUT_CHARACTER_PRECIS, CLIP_CHARACTER_PRECIS,
+			DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"仿宋"
+		);
+
+		HGDIOBJ hOldDc = SelectObject(hdc, hFont);
+		DeleteObject(hOldDc);
+
+		if (bShowHitokoto) GetHitokoto();
+	}
+	break;
 
 	case WM_TIMER:
+	{
+		if (wParam == 0)
 		{
-			if (wParam == 0)
-			{
-				DATE date;
-				GetLocalTime(&time);
-				SystemTimeToVariantTime(&time, &date);
-				INT termWeek = (date - TERM_START_DATE + 7) / 7;
+			DATE date;
+			GetLocalTime(&time);
+			SystemTimeToVariantTime(&time, &date);
+			INT termWeek = (date - TERM_START_DATE + 7) / 7;
 
-				WCHAR wcDateStr[64];
-				GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &time, L"dddd", wcDateStr, _countof(wcDateStr), NULL);
+			WCHAR wcDateStr[64];
+			GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &time, L"dddd", wcDateStr, _countof(wcDateStr), NULL);
 
-				if (bShowHitokoto) {
-					wsprintf(wcStr, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d\n%s",
-						termWeek, wcDateStr,
-						time.wYear, time.wMonth, time.wDay,
-						time.wHour, time.wMinute, time.wSecond,
-						wcHitokoto);
-				}
-				else {
-					wsprintf(wcStr, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d",
-						termWeek, wcDateStr,
-						time.wYear, time.wMonth, time.wDay,
-						time.wHour, time.wMinute, time.wSecond);
-				}
-
-				FillRect(hdc, &wndSize, hBgBrush); // clear window
-				DrawText(hdc, wcStr, lstrlen(wcStr), &wndSize, DT_CENTER | DT_WORDBREAK | DT_MODIFYSTRING);
+			if (bShowHitokoto) {
+				wsprintf(wcStr, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d\n%s",
+					termWeek, wcDateStr,
+					time.wYear, time.wMonth, time.wDay,
+					time.wHour, time.wMinute, time.wSecond,
+					wcHitokoto);
 			}
-			else if (wParam == 1) {
-				GetHitokoto();
+			else {
+				wsprintf(wcStr, L"第%d周 %s\n%hu/%hu/%hu %02d:%02d:%02d",
+					termWeek, wcDateStr,
+					time.wYear, time.wMonth, time.wDay,
+					time.wHour, time.wMinute, time.wSecond);
 			}
+
+			FillRect(hdc, &wndSize, hBgBrush); // clear window
+			DrawText(hdc, wcStr, lstrlen(wcStr), &wndSize, DT_CENTER | DT_WORDBREAK | DT_MODIFYSTRING);
 		}
-		break;
+		else if (wParam == 1) {
+			GetHitokoto();
+		}
+	}
+	break;
 
 	case WM_LBUTTONDOWN:
 		SendMessage(hWnd, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0); // 发送移动拖拽窗口移动指令
 		break;
 
 	case WM_MBUTTONDOWN:
-		GetHitokoto();
+		if (bShowHitokoto) GetHitokoto();
 		break;
 
 	case WM_RBUTTONDOWN:
-		bShowHitokoto = !bShowHitokoto;
-		break;
+		if (bShowHitokoto) {
+			bShowHitokoto = FALSE;
+			KillTimer(hWnd, 1);
 
+			wndSize.right = CHAR_WIDTH * 20;
+			wndSize.bottom = CHAR_HEIGHT * 2;
+		}
+		else {
+			bShowHitokoto = TRUE;
+			SetTimer(hWnd, 1, REFRESH_PERIOD_MS, NULL);
+			INT iLength = 2 * _countof(wcHitokoto);
+			wndSize.right = CHAR_WIDTH * 30;
+			wndSize.bottom = CHAR_HEIGHT * (iLength < 30 ? 3 : (iLength < 60 ? 4 : 5));
+		}
+		SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, wndSize.right, wndSize.bottom, SWP_SHOWWINDOW | SWP_NOMOVE);
+		PostMessage(hWnd, WM_TIMER, 0, 0);
+		break;
+	
 	case WM_DESTROY:
 		KillTimer(hWnd, 0);
 		KillTimer(hWnd, 1);
@@ -217,7 +241,7 @@ VOID GetHitokoto()
 			, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
 		if (NULL == hConnect) break;
 
-		hRequest = HttpOpenRequestA(hConnect, "GET", "/?c=a&c=b&c=c&encode=text&charset=utf-8",
+		hRequest = HttpOpenRequestA(hConnect, "GET", "/?c=a&c=b&c=c&c=d&c=g&c=h&c=i&c=j&c=k&c=l&encode=text&charset=utf-8",
 			NULL, NULL, NULL, INTERNET_FLAG_DONT_CACHE | INTERNET_FLAG_SECURE, 0);
 		if (NULL == hRequest) break;
 
